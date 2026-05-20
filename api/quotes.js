@@ -1,4 +1,4 @@
-import { setCors, yfFetch, parseQuoteMeta, mockQuote } from './_lib.js';
+import { setCors, getLiveQuote, mockQuote, FINNHUB_KEY } from './_lib.js';
 
 export default async function handler(req, res) {
   setCors(res);
@@ -12,12 +12,9 @@ export default async function handler(req, res) {
     symbols.map(async (s) => {
       const sym = s.toUpperCase();
       try {
-        const url = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-        const data = await yfFetch(url, 30_000);
-        const result = data.chart?.result?.[0];
-        quotes[sym] = result ? parseQuoteMeta(result.meta, sym) : mockQuote(sym);
+        quotes[sym] = await getLiveQuote(sym);
       } catch {
-        quotes[sym] = mockQuote(sym);
+        if (!FINNHUB_KEY) quotes[sym] = mockQuote(sym);
       }
     })
   );
