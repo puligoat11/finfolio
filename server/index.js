@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import yahooFinance from 'yahoo-finance2';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '..', '.env') });
@@ -181,13 +182,40 @@ async function getQuote(sym) {
 }
 
 async function getChart(sym, range) {
-  const interval = YF_INTERVAL[range] || '1d';
+  const interval = (YF_INTERVAL[range] || '1d');
   const chartTtl = range === '1d' ? 30_000 : 5 * 60_000;
+  const cacheKey = `chart:${sym}:${range}`;
+  const hit = cached(cacheKey, chartTtl);
+  if (hit) return hit;
 
-  // 1. Yahoo Finance no-auth (works for historical data without crumb/cookie)
+  // 1. yahoo-finance2 package (handles auth/rate-limit internally)
+  try {
+    const period1 = getStartDate(range);
+    const rows = await yahooFinance.historical(sym, { period1, interval }, { validateResult: false });
+    if (rows?.length) {
+      const valid = rows.filter(r => r.close != null && r.close > 0);
+      const result = {
+        dates:   valid.map(r => r.date.toISOString().split('T')[0]),
+        prices:  valid.map(r => r.close),
+        volumes: valid.map(r => r.volume ?? 0),
+        opens:   valid.map(r => r.open  ?? r.close),
+        highs:   valid.map(r => r.high  ?? r.close),
+        lows:    valid.map(r => r.low   ?? r.close),
+      };
+      setCache(cacheKey, result);
+      return result;
+    }
+  } catch (e) { console.warn(`[yf2/chart/${sym}]`, e.message); }
+
+  // 2. Yahoo Finance no-auth direct fetch
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } });
+    const res = await fetch(url, { headers: {
+      'User-Agent': UA,
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://finance.yahoo.com/',
+    } });
     if (res.ok) {
       const data = await res.json();
       const result = data.chart?.result?.[0];
@@ -198,19 +226,23 @@ async function getChart(sym, range) {
           price: q.close?.[i], volume: q.volume?.[i] ?? 0,
           open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
         })).filter(p => p.price != null && p.price > 0);
-        if (valid.length) return {
-          dates:   valid.map(p => p.date),
-          prices:  valid.map(p => p.price),
-          volumes: valid.map(p => p.volume),
-          opens:   valid.map(p => p.open  ?? p.price),
-          highs:   valid.map(p => p.high  ?? p.price),
-          lows:    valid.map(p => p.low   ?? p.price),
-        };
+        if (valid.length) {
+          const result2 = {
+            dates:   valid.map(p => p.date),
+            prices:  valid.map(p => p.price),
+            volumes: valid.map(p => p.volume),
+            opens:   valid.map(p => p.open  ?? p.price),
+            highs:   valid.map(p => p.high  ?? p.price),
+            lows:    valid.map(p => p.low   ?? p.price),
+          };
+          setCache(cacheKey, result2);
+          return result2;
+        }
       }
     }
   } catch (e) { console.warn(`[yf-noauth/chart/${sym}]`, e.message); }
 
-  // 2. Yahoo Finance with crumb session (fallback)
+  // 3. Yahoo Finance with crumb session
   try {
     const from = Math.floor(getStartDate(range).getTime() / 1000);
     const to   = Math.floor(Date.now() / 1000);
@@ -224,18 +256,21 @@ async function getChart(sym, range) {
         price: q.close?.[i], volume: q.volume?.[i] ?? 0,
         open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
       })).filter(p => p.price != null && p.price > 0);
-      if (valid.length) return {
-        dates:   valid.map(p => p.date),
-        prices:  valid.map(p => p.price),
-        volumes: valid.map(p => p.volume),
-        opens:   valid.map(p => p.open  ?? p.price),
-        highs:   valid.map(p => p.high  ?? p.price),
-        lows:    valid.map(p => p.low   ?? p.price),
-      };
+      if (valid.length) {
+        const result2 = {
+          dates:   valid.map(p => p.date),
+          prices:  valid.map(p => p.price),
+          volumes: valid.map(p => p.volume),
+          opens:   valid.map(p => p.open  ?? p.price),
+          highs:   valid.map(p => p.high  ?? p.price),
+          lows:    valid.map(p => p.low   ?? p.price),
+        };
+        setCache(cacheKey, result2);
+        return result2;
+      }
     }
   } catch (e) { console.warn(`[yf/chart/${sym}]`, e.message); }
 
-  // 3. Mock only when no API key configured
   if (FINNHUB_KEY) return { dates: [], prices: [], volumes: [], opens: [], highs: [], lows: [] };
   return mockChart(sym, range);
 }

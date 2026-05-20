@@ -175,7 +175,12 @@ export async function getLiveChart(sym, range) {
   // Yahoo Finance chart works without auth for historical data — try this first
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } });
+    const res = await fetch(url, { headers: {
+      'User-Agent': UA,
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://finance.yahoo.com/',
+    } });
     if (res.ok) {
       const data = await res.json();
       const result = data.chart?.result?.[0];
