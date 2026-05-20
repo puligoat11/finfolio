@@ -89,7 +89,7 @@ export function PortfolioChart({ positions }: Props) {
       ...positions.map(p => getChartData(p.symbol, range)),
     ]);
 
-    if (!spyData.length) { setLoading(false); return; }
+    if (!spyData.length && !positionCharts.some(c => c.length > 0)) { setLoading(false); return; }
 
     // Build date-keyed price maps for each position
     const priceMaps = positions.map((pos, i) => {

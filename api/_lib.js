@@ -112,7 +112,18 @@ export function mockQuote(symbol) {
     marketCap: price * 1_000_000_000, timestamp: Date.now() };
 }
 
+function seededRand(seed) {
+  let s = seed >>> 0;
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 0x100000000; };
+}
+function strHash(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;
+  return h;
+}
+
 export function mockChart(symbol, range) {
+  const rand = seededRand(strHash(symbol.toUpperCase() + range));
   const basePrice = MOCK_PRICES[symbol.toUpperCase()] ?? 150;
   const days = { '5d':5,'1mo':22,'3mo':66,'6mo':132,'ytd':140,'1y':252 }[range] ?? 500;
   let price = basePrice * 0.75;
@@ -121,10 +132,10 @@ export function mockChart(symbol, range) {
   for (let i = days; i >= 0; i--) {
     const d = new Date(now - i * dayMs);
     if (d.getDay() === 0 || d.getDay() === 6) continue;
-    price *= 1 + (Math.random() * 0.04 - 0.018);
+    price *= 1 + (rand() * 0.04 - 0.018);
     dates.push(d.toISOString().split('T')[0]);
     prices.push(Math.round(price * 100) / 100);
-    volumes.push(Math.floor(Math.random() * 30_000_000 + 5_000_000));
+    volumes.push(Math.floor(rand() * 30_000_000 + 5_000_000));
   }
   return { dates, prices, volumes, opens: prices, highs: prices.map(p => p * 1.01), lows: prices.map(p => p * 0.99) };
 }
@@ -222,7 +233,6 @@ export async function getLiveChart(sym, range) {
     }
   } catch (e) { console.warn(`[yf/chart/${sym}]`, e.message); }
 
-  if (FINNHUB_KEY) return { dates: [], prices: [], volumes: [], opens: [], highs: [], lows: [] };
   return mockChart(sym, range);
 }
 

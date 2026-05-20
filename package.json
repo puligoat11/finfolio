@@ -7,6 +7,7 @@
     "dev": "vite",
     "server": "node server/index.js",
     "dev:full": "concurrently -n \"UI,API\" -c \"cyan,green\" \"npm run dev\" \"npm run server\"",
+    "open": "concurrently -n \"UI,API\" -c \"cyan,green\" \"npm run dev\" \"npm run server\" & sleep 3 && open http://localhost:3000",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
