@@ -261,12 +261,13 @@ export const CAPITAL_ONE_CATEGORY_MAP: { [key: string]: string } = {
   'Professional Services': 'Bills',
   'Travel': 'Travel',
   'Other Travel': 'Travel',
+  'Airfare': 'Travel',
   'Lodging': 'Travel',
   'Internet': 'Bills',
   'Fees/Adjustments': 'Other',
-  'Other Services': 'Bills',
+  'Other Services': 'Other',
   'Other': 'Other',
-  'Payment/Credit': 'SKIP', // Skip payment/credit rows
+  'Payment/Credit': 'SKIP',
 };
 
 // Helper to generate expense hash for duplicate detection

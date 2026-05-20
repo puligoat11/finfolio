@@ -69,13 +69,15 @@ function demoExpenses(): Array<{id: string; date: string; description: string; a
 
 export function useDemoData() {
   useEffect(() => {
-    if (getSetting('demo_loaded_v3')) return;
+    if (getSetting('demo_loaded_v4')) return;
 
-    // Clear any positions and trades from previous demo versions
+    // Clear all demo data — user will input their own
     clearTable('positions');
     clearTable('trades');
+    clearTable('income');
+    clearTable('expenses');
 
-    // Seed watchlist
+    // Seed watchlist only
     demoWatchlist.forEach(item =>
       upsert('watchlist', 'symbol', item.symbol, {
         symbol: item.symbol,
@@ -84,12 +86,6 @@ export function useDemoData() {
       })
     );
 
-    // Seed 12 months of income
-    demoIncomeEntries().forEach(e => insert('income', { ...e, recurring: e.type === 'Salary' }));
-
-    // Seed 12 months of expenses
-    demoExpenses().forEach(e => insert('expenses', e));
-
-    setSetting('demo_loaded_v3', 'true');
+    setSetting('demo_loaded_v4', 'true');
   }, []);
 }

@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, Badge } from '
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { formatCurrency } from '@/utils/formatters';
 import { cn } from '@/utils/cn';
+import { CAPITAL_ONE_CATEGORY_MAP } from '@/types/models';
 
 const CAT_COLORS: Record<string, string> = {
   Dining:        '#ef4444',
@@ -40,6 +41,7 @@ export function ExpensesPage() {
   const [editBudgets, setEditBudgets]     = useState<Record<string, string>>({});
   const [csvPreview, setCsvPreview]       = useState<CSVPreviewRow[] | null>(null);
   const [csvRaw, setCsvRaw]               = useState('');
+  const [csvFileName, setCsvFileName]     = useState('');
   const [importResult, setImportResult]   = useState<ImportResult | null>(null);
   const [isDragging, setIsDragging]       = useState(false);
   const fileRef                           = useRef<HTMLInputElement>(null);
@@ -98,21 +100,70 @@ export function ExpensesPage() {
     setForm({ ...form, description: '', amount: '' });
   }
 
-  function handleFileRead(content: string) {
+  function parsePreviewLine(line: string): string[] {
+    const result: string[] = [];
+    let cur = '', inQ = false;
+    for (const ch of line) {
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    result.push(cur.trim());
+    return result;
+  }
+
+  function handleFileRead(content: string, fileName = '') {
     setCsvRaw(content);
+    setCsvFileName(fileName);
     setImportResult(null);
-    // Generate preview: parse first 5 rows
-    const lines = content.trim().split('\n').slice(0, 6);
+    const lines = content.trim().split('\n');
+    if (lines.length < 2) { setCsvPreview([]); return; }
+
+    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim().toLowerCase());
+    const isCapOne = headers.includes('transaction date') && (headers.includes('debit') || headers.includes('credit'));
+
     const preview: CSVPreviewRow[] = [];
-    lines.slice(1).forEach(line => {
-      const cols = line.split(',').map(s => s.replace(/^"|"$/g, '').trim());
-      if (cols.length >= 3) {
-        const amt = parseFloat(cols[2]) || parseFloat(cols[3]) || 0;
-        if (amt > 0) {
-          preview.push({ date: cols[0], description: cols[1] || cols[2], amount: amt, category: 'Auto' });
-        }
+
+    if (isCapOne) {
+      const dateIdx = headers.indexOf('transaction date');
+      const descIdx = headers.indexOf('description');
+      const debitIdx = headers.indexOf('debit');
+      const catIdx  = headers.indexOf('category');
+      for (let i = 1; i < lines.length && preview.length < 5; i++) {
+        const cols = parsePreviewLine(lines[i]);
+        const debitStr = cols[debitIdx]?.trim();
+        if (!debitStr) continue;
+        const amount = parseFloat(debitStr.replace(/[$,]/g, ''));
+        if (isNaN(amount) || amount <= 0) continue;
+        const bankCat = cols[catIdx]?.trim() || '';
+        if (CAPITAL_ONE_CATEGORY_MAP[bankCat] === 'SKIP') continue;
+        preview.push({
+          date: cols[dateIdx]?.trim() || '',
+          description: cols[descIdx]?.trim() || '',
+          amount,
+          category: CAPITAL_ONE_CATEGORY_MAP[bankCat] || 'Other',
+        });
       }
-    });
+    } else {
+      const dateIdx   = headers.findIndex(h => h.includes('date'));
+      const descIdx   = headers.findIndex(h => h.includes('description') || h.includes('merchant'));
+      const amountIdx = headers.findIndex(h => h.includes('amount') || h.includes('debit'));
+      const catIdx    = headers.findIndex(h => h.includes('category'));
+      for (let i = 1; i < lines.length && preview.length < 5; i++) {
+        const cols = parsePreviewLine(lines[i]);
+        const amtStr = amountIdx !== -1 ? cols[amountIdx]?.trim() : '';
+        if (!amtStr) continue;
+        const amount = Math.abs(parseFloat(amtStr.replace(/[$,]/g, '')));
+        if (isNaN(amount) || amount <= 0) continue;
+        preview.push({
+          date: dateIdx !== -1 ? cols[dateIdx]?.trim() : '',
+          description: descIdx !== -1 ? cols[descIdx]?.trim() : 'Imported',
+          amount,
+          category: catIdx !== -1 && cols[catIdx] ? cols[catIdx].trim() : 'Other',
+        });
+      }
+    }
+
     setCsvPreview(preview);
   }
 
@@ -120,7 +171,7 @@ export function ExpensesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => handleFileRead(ev.target?.result as string);
+    reader.onload = ev => handleFileRead(ev.target?.result as string, file.name);
     reader.readAsText(file);
     e.target.value = '';
   }
@@ -131,16 +182,17 @@ export function ExpensesPage() {
     const file = e.dataTransfer.files[0];
     if (!file || !file.name.endsWith('.csv')) return;
     const reader = new FileReader();
-    reader.onload = ev => handleFileRead(ev.target?.result as string);
+    reader.onload = ev => handleFileRead(ev.target?.result as string, file.name);
     reader.readAsText(file);
   }, []);
 
   function confirmImport() {
     if (!csvRaw) return;
-    const result = importCSV(csvRaw);
+    const result = importCSV(csvRaw, csvFileName);
     setImportResult(result);
     setCsvPreview(null);
     setCsvRaw('');
+    setCsvFileName('');
     fetchExpenses();
   }
 
