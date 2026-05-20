@@ -3,7 +3,6 @@ import cors from 'cors';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import yahooFinance from 'yahoo-finance2';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '..', '.env') });
@@ -182,32 +181,31 @@ async function getQuote(sym) {
 }
 
 async function getChart(sym, range) {
-  const interval = (YF_INTERVAL[range] || '1d');
+  const interval = YF_INTERVAL[range] || '1d';
   const chartTtl = range === '1d' ? 30_000 : 5 * 60_000;
   const cacheKey = `chart:${sym}:${range}`;
   const hit = cached(cacheKey, chartTtl);
   if (hit) return hit;
 
-  // 1. yahoo-finance2 package (handles auth/rate-limit internally)
-  try {
-    const period1 = getStartDate(range);
-    const rows = await yahooFinance.historical(sym, { period1, interval }, { validateResult: false });
-    if (rows?.length) {
-      const valid = rows.filter(r => r.close != null && r.close > 0);
-      const result = {
-        dates:   valid.map(r => r.date.toISOString().split('T')[0]),
-        prices:  valid.map(r => r.close),
-        volumes: valid.map(r => r.volume ?? 0),
-        opens:   valid.map(r => r.open  ?? r.close),
-        highs:   valid.map(r => r.high  ?? r.close),
-        lows:    valid.map(r => r.low   ?? r.close),
-      };
-      setCache(cacheKey, result);
-      return result;
-    }
-  } catch (e) { console.warn(`[yf2/chart/${sym}]`, e.message); }
+  function parseYfResult(result) {
+    const q = result.indicators?.quote?.[0] || {};
+    const valid = result.timestamp.map((t, i) => ({
+      date: new Date(t * 1000).toISOString().split('T')[0],
+      price: q.close?.[i], volume: q.volume?.[i] ?? 0,
+      open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
+    })).filter(p => p.price != null && p.price > 0);
+    if (!valid.length) return null;
+    return {
+      dates:   valid.map(p => p.date),
+      prices:  valid.map(p => p.price),
+      volumes: valid.map(p => p.volume),
+      opens:   valid.map(p => p.open  ?? p.price),
+      highs:   valid.map(p => p.high  ?? p.price),
+      lows:    valid.map(p => p.low   ?? p.price),
+    };
+  }
 
-  // 2. Yahoo Finance no-auth direct fetch
+  // 1. Yahoo Finance no-auth (query1 — least rate-limited endpoint)
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
     const res = await fetch(url, { headers: {
@@ -220,29 +218,13 @@ async function getChart(sym, range) {
       const data = await res.json();
       const result = data.chart?.result?.[0];
       if (result?.timestamp) {
-        const q = result.indicators?.quote?.[0] || {};
-        const valid = result.timestamp.map((t, i) => ({
-          date: new Date(t * 1000).toISOString().split('T')[0],
-          price: q.close?.[i], volume: q.volume?.[i] ?? 0,
-          open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
-        })).filter(p => p.price != null && p.price > 0);
-        if (valid.length) {
-          const result2 = {
-            dates:   valid.map(p => p.date),
-            prices:  valid.map(p => p.price),
-            volumes: valid.map(p => p.volume),
-            opens:   valid.map(p => p.open  ?? p.price),
-            highs:   valid.map(p => p.high  ?? p.price),
-            lows:    valid.map(p => p.low   ?? p.price),
-          };
-          setCache(cacheKey, result2);
-          return result2;
-        }
+        const parsed = parseYfResult(result);
+        if (parsed) { setCache(cacheKey, parsed); return parsed; }
       }
     }
   } catch (e) { console.warn(`[yf-noauth/chart/${sym}]`, e.message); }
 
-  // 3. Yahoo Finance with crumb session
+  // 2. Yahoo Finance with crumb session (fallback)
   try {
     const from = Math.floor(getStartDate(range).getTime() / 1000);
     const to   = Math.floor(Date.now() / 1000);
@@ -250,24 +232,8 @@ async function getChart(sym, range) {
     const data = await yfFetch(url, chartTtl);
     const result = data.chart?.result?.[0];
     if (result?.timestamp) {
-      const q = result.indicators?.quote?.[0] || {};
-      const valid = result.timestamp.map((t, i) => ({
-        date: new Date(t * 1000).toISOString().split('T')[0],
-        price: q.close?.[i], volume: q.volume?.[i] ?? 0,
-        open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
-      })).filter(p => p.price != null && p.price > 0);
-      if (valid.length) {
-        const result2 = {
-          dates:   valid.map(p => p.date),
-          prices:  valid.map(p => p.price),
-          volumes: valid.map(p => p.volume),
-          opens:   valid.map(p => p.open  ?? p.price),
-          highs:   valid.map(p => p.high  ?? p.price),
-          lows:    valid.map(p => p.low   ?? p.price),
-        };
-        setCache(cacheKey, result2);
-        return result2;
-      }
+      const parsed = parseYfResult(result);
+      if (parsed) { setCache(cacheKey, parsed); return parsed; }
     }
   } catch (e) { console.warn(`[yf/chart/${sym}]`, e.message); }
 
