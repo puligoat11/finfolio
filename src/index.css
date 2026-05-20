@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363D;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: #30363D;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* Light mode scrollbar */
+.light ::-webkit-scrollbar-thumb {
+  background: #D0D7DE;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: #afb8c1;
+}
+
+/* Base styles */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply antialiased;
+}
+
+/* Focus styles */
+*:focus-visible {
+  @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-dark-bg;
+}
+
+/* Light mode focus */
+.light *:focus-visible {
+  @apply ring-offset-light-bg;
+}
+
+/* Selection */
+::selection {
+  @apply bg-primary/30;
+}
+
+/* Number input hide spinners */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* Range input styling */
+input[type='range'] {
+  @apply appearance-none bg-transparent cursor-pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  @apply h-1.5 rounded-full bg-dark-border;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  @apply appearance-none w-4 h-4 rounded-full bg-primary -mt-1;
+}
+
+input[type='range']:disabled::-webkit-slider-thumb {
+  @apply bg-dark-text-secondary;
+}
+
+/* Light mode overrides */
+.light {
+  @apply bg-light-bg text-light-text;
+}
+
+.light .bg-dark-bg {
+  @apply bg-light-bg;
+}
+
+.light .bg-dark-surface {
+  @apply bg-light-surface;
+}
+
+.light .bg-dark-card {
+  @apply bg-light-card;
+}
+
+.light .border-dark-border {
+  @apply border-light-border;
+}
+
+.light .text-dark-text {
+  @apply text-light-text;
+}
+
+.light .text-dark-text-secondary {
+  @apply text-light-text-secondary;
+}
+
+/* Animation utilities */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Table styles */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-all duration-200;
+}
+
+.card-hover:hover {
+  @apply border-dark-text-secondary/50;
+}
+
+.light .card-hover:hover {
+  @apply border-light-text-secondary/50;
+}
