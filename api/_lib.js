@@ -169,29 +169,36 @@ export async function getLiveQuote(sym) {
 }
 
 export async function getLiveChart(sym, range) {
-  const from = Math.floor(getStartDate(range).getTime() / 1000);
-  const to   = Math.floor(Date.now() / 1000);
-  const ttl  = range === '1d' ? 30_000 : 5 * 60_000;
+  const interval = YF_INTERVAL[range] || '1d';
+  const ttl = range === '1d' ? 30_000 : 5 * 60_000;
 
+  // Yahoo Finance chart works without auth for historical data — try this first
   try {
-    const resolution = FH_RESOLUTION[range] || 'D';
-    const d = await finnhubGet(`/stock/candle?symbol=${sym}&resolution=${resolution}&from=${from}&to=${to}`, ttl);
-    if (d.s === 'ok' && d.t?.length) {
-      const valid = d.t.map((t, i) => ({
-        date: new Date(t * 1000).toISOString().split('T')[0],
-        price: d.c[i], volume: d.v?.[i] ?? 0,
-        open: d.o?.[i], high: d.h?.[i], low: d.l?.[i],
-      })).filter(p => p.price > 0);
-      if (valid.length) return {
-        dates: valid.map(p => p.date), prices: valid.map(p => p.price),
-        volumes: valid.map(p => p.volume), opens: valid.map(p => p.open ?? p.price),
-        highs: valid.map(p => p.high ?? p.price), lows: valid.map(p => p.low ?? p.price),
-      };
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
+    const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      const result = data.chart?.result?.[0];
+      if (result?.timestamp) {
+        const q = result.indicators?.quote?.[0] || {};
+        const valid = result.timestamp.map((t, i) => ({
+          date: new Date(t * 1000).toISOString().split('T')[0],
+          price: q.close?.[i], volume: q.volume?.[i] ?? 0,
+          open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
+        })).filter(p => p.price != null && p.price > 0);
+        if (valid.length) return {
+          dates: valid.map(p => p.date), prices: valid.map(p => p.price),
+          volumes: valid.map(p => p.volume), opens: valid.map(p => p.open ?? p.price),
+          highs: valid.map(p => p.high ?? p.price), lows: valid.map(p => p.low ?? p.price),
+        };
+      }
     }
-  } catch (e) { if (e.message !== 'no_key') console.warn(`[fh/chart/${sym}]`, e.message); }
+  } catch (e) { console.warn(`[yf-noauth/chart/${sym}]`, e.message); }
 
+  // Fallback: Yahoo Finance with crumb session
   try {
-    const interval = YF_INTERVAL[range] || '1d';
+    const from = Math.floor(getStartDate(range).getTime() / 1000);
+    const to   = Math.floor(Date.now() / 1000);
     const url = `https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&period1=${from}&period2=${to}`;
     const data = await yfFetch(url, ttl);
     const result = data.chart?.result?.[0];

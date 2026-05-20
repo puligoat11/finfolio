@@ -130,6 +130,12 @@ export function upsert(table: string, key: string, keyValue: unknown, record: Db
   saveDatabase();
 }
 
+export function clearTable(table: string): void {
+  const tableData = getTable(table);
+  tableData.splice(0, tableData.length);
+  saveDatabase();
+}
+
 export function remove(table: string, predicate: (item: DbRecord) => boolean): void {
   const tableData = getTable(table);
   const index = tableData.findIndex(predicate);
