@@ -81,7 +81,7 @@ export async function getChartData(
 
     const points: ChartDataPoint[] = (raw.dates as string[])
       .map((d, i) => ({
-        date: new Date(d + 'T16:00:00'), // treat as market close
+        date: d.includes('T') ? new Date(d) : new Date(d + 'T16:00:00'),
         value: raw.prices[i] as number,
         open:   raw.opens?.[i],
         high:   raw.highs?.[i],

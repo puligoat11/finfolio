@@ -9,10 +9,10 @@ import { getChartData } from '@/services/api/yahooFinance';
 import { formatCurrency, formatSignedPercent, formatSignedCurrency } from '@/utils/formatters';
 import type { Position } from '@/types/models';
 
-type Period = '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'MAX';
+type Period = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'MAX';
 
 const periodToRange: Record<Period, string> = {
-  '5D': '5d', '1M': '1mo', '3M': '3mo',
+  '1D': '1d', '5D': '5d', '1M': '1mo', '3M': '3mo',
   '6M': '6mo', 'YTD': 'ytd', '1Y': '1y', 'MAX': 'max',
 };
 
@@ -36,7 +36,7 @@ interface Props {
   positions: Position[];
 }
 
-const PERIODS: Period[] = ['5D', '1M', '3M', '6M', 'YTD', '1Y', 'MAX'];
+const PERIODS: Period[] = ['1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', 'MAX'];
 
 function CustomTooltip({ active, payload, label }: {
   active?: boolean;
@@ -81,7 +81,10 @@ export function PortfolioChart({ positions }: Props) {
     setLoading(true);
     setComparison(null);
 
-    const range = periodToRange[period] as '5d' | '1mo' | '3mo' | '6mo' | 'ytd' | '1y' | 'max';
+    const range = periodToRange[period] as '1d' | '5d' | '1mo' | '3mo' | '6mo' | 'ytd' | '1y' | 'max';
+    const intraday = period === '1D';
+    const dateKey = (pt: { date: Date }) =>
+      intraday ? pt.date.toISOString() : pt.date.toISOString().split('T')[0];
 
     const [spyData, qqqData, ...positionCharts] = await Promise.all([
       getChartData('SPY', range),
@@ -94,13 +97,13 @@ export function PortfolioChart({ positions }: Props) {
     // Build date-keyed price maps for each position
     const priceMaps = positions.map((pos, i) => {
       const m = new Map<string, number>();
-      positionCharts[i].forEach(pt => m.set(pt.date.toISOString().split('T')[0], pt.value));
+      positionCharts[i].forEach(pt => m.set(dateKey(pt), pt.value));
       return { pos, map: m };
     });
 
-    const spyMap = new Map(spyData.map(pt => [pt.date.toISOString().split('T')[0], pt.value]));
-    const qqqMap = new Map(qqqData.map(pt => [pt.date.toISOString().split('T')[0], pt.value]));
-    const dates  = spyData.map(pt => pt.date.toISOString().split('T')[0]);
+    const spyMap = new Map(spyData.map(pt => [dateKey(pt), pt.value]));
+    const qqqMap = new Map(qqqData.map(pt => [dateKey(pt), pt.value]));
+    const dates  = spyData.map(pt => dateKey(pt));
 
     // Portfolio value at each date
     const portfolioSeries = dates.map(date =>
@@ -113,7 +116,9 @@ export function PortfolioChart({ positions }: Props) {
     const startQqq       = qqqData[0]?.value || 1;
 
     const points: ChartPoint[] = dates.map((date, i) => ({
-      date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      date: intraday
+        ? new Date(date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       portfolio: portfolioSeries[i],
       sp500:     (spyMap.get(date) ?? startSpy) / startSpy * startPortfolio,
       nasdaq:    (qqqMap.get(date) ?? startQqq) / startQqq * startPortfolio,

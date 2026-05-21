@@ -123,6 +123,7 @@ function strHash(str) {
 }
 
 export function mockChart(symbol, range) {
+  if (range === '1d') return mockIntradayChart(symbol);
   const rand = seededRand(strHash(symbol.toUpperCase() + range));
   const basePrice = MOCK_PRICES[symbol.toUpperCase()] ?? 150;
   const days = { '5d':5,'1mo':22,'3mo':66,'6mo':132,'ytd':140,'1y':252 }[range] ?? 500;
@@ -138,6 +139,25 @@ export function mockChart(symbol, range) {
     volumes.push(Math.floor(rand() * 30_000_000 + 5_000_000));
   }
   return { dates, prices, volumes, opens: prices, highs: prices.map(p => p * 1.01), lows: prices.map(p => p * 0.99) };
+}
+
+function mockIntradayChart(symbol) {
+  const today = new Date().toDateString();
+  const rand = seededRand(strHash(symbol.toUpperCase() + today));
+  const basePrice = MOCK_PRICES[symbol.toUpperCase()] ?? 150;
+  const open = new Date(); open.setHours(9, 30, 0, 0);
+  const close = new Date(); close.setHours(16, 0, 0, 0);
+  const now = Date.now();
+  const end = Math.min(now, close.getTime());
+  const dates = [], prices = [], volumes = [];
+  let price = basePrice * (0.985 + rand() * 0.03);
+  for (let t = open.getTime(); t <= end; t += 5 * 60_000) {
+    price *= 1 + (rand() * 0.006 - 0.003);
+    dates.push(new Date(t).toISOString());
+    prices.push(Math.round(price * 100) / 100);
+    volumes.push(Math.floor(rand() * 1_000_000 + 50_000));
+  }
+  return { dates, prices, volumes, opens: prices, highs: prices.map(p => p * 1.001), lows: prices.map(p => p * 0.999) };
 }
 
 // ── Date/interval helpers ─────────────────────────────────────────────────────
@@ -197,8 +217,11 @@ export async function getLiveChart(sym, range) {
       const result = data.chart?.result?.[0];
       if (result?.timestamp) {
         const q = result.indicators?.quote?.[0] || {};
+        const toDateStr = t => range === '1d'
+          ? new Date(t * 1000).toISOString()
+          : new Date(t * 1000).toISOString().split('T')[0];
         const valid = result.timestamp.map((t, i) => ({
-          date: new Date(t * 1000).toISOString().split('T')[0],
+          date: toDateStr(t),
           price: q.close?.[i], volume: q.volume?.[i] ?? 0,
           open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
         })).filter(p => p.price != null && p.price > 0);
@@ -220,8 +243,11 @@ export async function getLiveChart(sym, range) {
     const result = data.chart?.result?.[0];
     if (result?.timestamp) {
       const q = result.indicators?.quote?.[0] || {};
+      const toDateStr = t => range === '1d'
+        ? new Date(t * 1000).toISOString()
+        : new Date(t * 1000).toISOString().split('T')[0];
       const valid = result.timestamp.map((t, i) => ({
-        date: new Date(t * 1000).toISOString().split('T')[0],
+        date: toDateStr(t),
         price: q.close?.[i], volume: q.volume?.[i] ?? 0,
         open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
       })).filter(p => p.price != null && p.price > 0);

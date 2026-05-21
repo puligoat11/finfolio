@@ -4,6 +4,7 @@ import { Button, Card, CardHeader, CardTitle, CardContent, SkeletonCard } from '
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { PositionsTable } from '@/components/dashboard/PositionsTable';
 import { PortfolioChart } from '@/components/portfolio/PortfolioChart';
+import { LivePerformanceTracker } from '@/components/portfolio/LivePerformanceTracker';
 import { WatchlistWidget } from '@/components/watchlist/WatchlistWidget';
 import { RecentTrades } from '@/components/trades/RecentTrades';
 import { TradeModal } from '@/components/trades/TradeModal';
@@ -86,6 +87,9 @@ export default function DashboardPage() {
           icon={<Layers className="w-5 h-5" />}
         />
       </div>
+
+      {/* Live Performance Tracker */}
+      <LivePerformanceTracker />
 
       {/* Main grid */}
       <div className="grid grid-cols-12 gap-6">
